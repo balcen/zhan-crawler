@@ -1,8 +1,12 @@
-import json
-import pathlib
-from services.storage import Storage
-from services import listening
+from services.ielts_listening_service import IeltsListeningService
 
 
-s = Storage()
-s.print()
+def main():
+    ils = IeltsListeningService()
+    # tpo_list = ils.get_tpo_list()
+    # ils.get_all_section_url(tpo_list)
+    ils.get_all_section_content()
+
+
+if __name__ == '__main__':
+    main()
