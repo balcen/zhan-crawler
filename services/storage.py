@@ -10,3 +10,8 @@ class Storage:
         path = self.path / filename
         with open(path, 'w') as fp:
             json.dump(data, fp)
+
+    def read(self, filename):
+        path = self.path / filename
+        with open(path, 'r') as fp:
+            return json.load(fp)
