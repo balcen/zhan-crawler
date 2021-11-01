@@ -1,10 +1,11 @@
-import threading
 import json
 import time
-
+import urllib.error
+from pathlib import Path
+from urllib.request import urlretrieve
+from urllib.error import ContentTooShortError
 from services.login import login
 from services.storage import Storage
-from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.by import By
@@ -73,3 +74,22 @@ class Test:
 
         storage = Storage()
         storage.store(tpo, f"ielts/tpo{tpo['order']}_content.json")
+
+    def get_all_section_audio(self, path):
+        print(path)
+        with open(path, 'r') as fp:
+            tpo = json.load(fp)
+
+        for test in tpo['tests']:
+            section_order = 1
+            for section in test['sections']:
+                folder = Path('storage/ielts/audio')
+                filename = f"ielts_{tpo['order']}_test{test['order']}_section{section_order}.mp3"
+                self.recu_down(section['question_audio_url'], folder/filename)
+                section_order += 1
+
+    def recu_down(self, url, filename):
+        try:
+            urlretrieve(url, filename)
+        except ContentTooShortError:
+            self.recu_down(url, filename)

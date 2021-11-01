@@ -1,4 +1,5 @@
 import threading
+import json
 from ielts.tpo import Tpo
 from ielts.test import Test
 from pathlib import Path
@@ -39,3 +40,10 @@ class IeltsListeningService:
 
         for t in threads:
             t.join()
+
+    @staticmethod
+    def download_all_section_audio():
+        paths = Path('storage/ielts').glob('*content.json')
+        test = Test()
+        for path in paths:
+            test.get_all_section_audio(path)
