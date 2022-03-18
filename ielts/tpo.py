@@ -1,105 +1,137 @@
-import re
 from selenium import webdriver
-from services.storage import Storage
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException
+import login
+import time
+import pdb
 
 
-INDEX_URL = 'https://top.zhan.com/ielts/listen/cambridge.html'
+def get_tpo_urls(driver, url):
+    driver.get(url)
 
+    tpo_li_tags = driver.find_elements(By.XPATH, '//ul[contains(@class, "tpo_no_row")]/li')
 
-class Tpo:
-    @staticmethod
-    def get_tpo_urls(url=INDEX_URL):
-        storage = Storage()
+    result = []
 
-        try:
-            result = storage.read('ielts/tpo_urls.json')
-        except FileNotFoundError:
-            caps = DesiredCapabilities().FIREFOX
-            caps['pageLoadStrategy'] = 'eager'
+    for tpo_li_tag in tpo_li_tags:
+        a_tag = tpo_li_tag.find_element(By.XPATH, 'a')
+        result.append({
+            'title': a_tag.text,
+            'url': a_tag.get_attribute('href'),
+        })
 
-            driver = webdriver.Firefox(desired_capabilities=caps)
-            driver.get(url)
+    return result
 
-            ul_tag = driver.find_element_by_css_selector('ul.tpo_list.tpo_no_row')
-            li_tags = ul_tag.find_elements_by_tag_name('li')
+def get_section_urls(driver, url):
+    driver.get(url)
 
-            result = list()
-            for li_tag in li_tags:
-                a_tag = li_tag.find_element_by_tag_name('a')
-                result.append({
-                    'title': a_tag.text,
-                    'tpo_url': a_tag.get_attribute('href'),
-                    'order': int(re.search(r"[0-9]+", a_tag.text).group())
+    tpo_desc_item_list = driver.find_element(By.XPATH, '//div[contains(@class, "tpo_desc_item_list")]')
+
+    title_div_tags = tpo_desc_item_list.find_elements(By.XPATH, 'div[contains(@class, "title")]')
+
+    test_div_tags = tpo_desc_item_list.find_elements(By.XPATH, 'div[contains(@class, "tpo_desc_list")]')
+
+    results = []
+
+    if len(title_div_tags) == len(test_div_tags):
+        for index, title_div_tag in enumerate(title_div_tags):
+            test_div_tag = test_div_tags[index]
+
+            sections = []
+
+            for section_div_tag in test_div_tag.find_elements(By.XPATH, 'div[contains(@class, "tpo_talking_item")]'):
+                sections.append({
+                    'section_part': section_div_tag.find_element(By.XPATH, 'div[contains(@class, "text")]').text,
+                    'title': section_div_tag.find_element(By.XPATH, 'div[contains(@class, "text_line")]/span').text,
+                    'url': section_div_tag.find_element(By.XPATH, 'a[2]').get_attribute('href'),
                 })
 
-            storage.store(data=result, filename='ielts/tpo_urls.json')
+            results.append({
+                'title': title_div_tag.text,
+                'sections': sections
+            })
 
-            driver.close()
+    return results
 
-        return result
+def get_speak_question(driver, url):
+    driver.get(url)
 
-    def get_test_urls(self, tpo):
-        caps = DesiredCapabilities().FIREFOX
-        caps['pageLoadStrategy'] = 'eager'
-        driver = webdriver.Firefox(desired_capabilities=caps)
+    try:
+        element = WebDriverWait(driver, 5).until(
+            lambda d: d.find_element(By.XPATH, '//a[contains(@class, "login_btn")]')
+        )
 
-        filename = f"ielts/tpo{tpo['order']}_section_urls.json"
+        element.click()
 
-        try:
-            storage = Storage()
-            tpo_content = storage.read(filename)
-        except FileNotFoundError:
-            driver.get(tpo['tpo_url'])
-            test_list_tag = driver.find_element_by_css_selector('div.tpo_desc_item_list')
-            test_tags = test_list_tag.find_elements_by_tag_name('div')
+        login.login(driver)
+    except TimeoutException:
+        WebDriverWait(driver, 5).until(
+            lambda d: d.find_element(By.XPATH, '//div[contains(@class, "avatar")]')
+        )
 
-            tpo_content = {'title': tpo['title'], 'order': tpo['order'], 'tests': list()}
-            tmp_test = dict()
-            for test_tag in test_tags:
-                class_name = test_tag.get_attribute('class')
-                if class_name == 'clear':
-                    if tmp_test:
-                        tpo_content['tests'].append(tmp_test)
-                        tmp_test = dict()
-                elif class_name == 'title':
-                    tmp_test['title'] = test_tag.text
-                    tmp_test['order'] = int(re.search(r"(?<=Test)[0-9]+", test_tag.text).group())
-                elif class_name == 'tpo_desc_list':
-                    tmp_test['sections'] = self._get_section_urls(test_tag)
+    # pdb.set_trace()
 
-            storage = Storage()
-            storage.store(data=tpo_content, filename=filename)
+    # driver.refresh()
 
-        driver.close()
+    order = 1
 
-        return tpo_content
+    talk_title_element = driver.find_element(By.XPATH, '//div[@class="talk_title"]')
 
-    @classmethod
-    def _get_section_urls(cls, tpo_desc_list_tag):
-        # 在 tpo_desc_list 裡面有多個 tpo_desc_item 代表不同的 section
-        tpo_desc_item_tags = tpo_desc_list_tag.find_elements_by_css_selector('div.tpo_desc_item')
+    try:
+        talk_title = talk_title_element.find_element(By.XPATH, 'div').text
+    except NoSuchElementException:
+        talk_title = talk_title_element.find_element(By.XPATH, 'p').get_attribute('innerHTML')
 
-        section_contents = list()
-        for tpo_desc_item_tag in tpo_desc_item_tags:
-            tmp_section = dict()
-            # 每個 tpo_desc_item 裡面有一個 item_content
-            content_tag = tpo_desc_item_tag.find_element_by_css_selector('div.item_content')
+    result = {
+        'order': order,
+        'talk_title': talk_title,
+        'exp': driver.find_element(By.XPATH, '//div[@class="pigai_text"]/div[2]/p').get_attribute('innerHTML'),
+    }
 
-            # item_content 裏面有 item_img 和 item_text
-            # item_img 放圖片上的資料
-            item_img_tag = content_tag.find_element_by_css_selector('div.item_img')
+    try:
+         result['question'] = driver.find_element(By.XPATH, '//div[@class="talk_test_text"]/p').text
 
-            item_img_tip_tags = item_img_tag.find_element_by_css_selector('div.item_img_tips')
-            title_span = item_img_tip_tags.find_element_by_css_selector('span.left')
-            tmp_section['title'] = title_span.text
+         results = [result]
 
-            cover_img_tag = item_img_tag.find_element_by_css_selector('img.cover_img')
-            tmp_section['cover'] = cover_img_tag.get_attribute('src')
+         order += 1
 
-            section_answer_tag = item_img_tag.find_element_by_tag_name('a')
-            tmp_section['url'] = section_answer_tag.get_attribute('href')
+         question_page_li_tags = driver.find_elements(By.XPATH, '//div[@class="pages_content"]/ul/a')
 
-            section_contents.append(tmp_section)
+         links_hrefs = [link.get_attribute('href') for link in question_page_li_tags[1:]]
 
-        return section_contents
+         for href in links_hrefs:
+             driver.get(href)
+
+             talk_title_element = driver.find_element(By.XPATH, '//div[@class="talk_title"]')
+
+             try:
+                 talk_title = talk_title_element.find_element(By.XPATH, 'div').text
+             except NoSuchElementException:
+                 talk_title = talk_title_element.find_element(By.XPATH, 'p').get_attribute('innerHTML')
+
+             talk_test_text_element = WebDriverWait(driver, 30).until(
+                 EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "talk_test_text")]/p'))
+             )
+
+             exp_element = WebDriverWait(driver, 30).until(
+                 EC.presence_of_element_located((By.XPATH, '//div[@class="pigai_text"]/div[2]/p'))
+             )
+
+             results.append({
+                 'order': order,
+                 'talk_title': talk_title,
+                 'question': talk_test_text_element.text,
+                 'exp': exp_element.get_attribute('innerHTML')
+             })
+
+             order += 1
+
+    except NoSuchElementException:
+        result['question'] = driver.find_element(By.XPATH, '//div[@class="nano-content_in"]/div').get_attribute('innerHTML')
+
+        results = [result]
+
+    return results

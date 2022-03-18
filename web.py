@@ -1,4 +1,12 @@
 from selenium import webdriver
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
-driver = webdriver.Firefox()
-driver.get('https://top.zhan.com/ielts/listen/cambridge.html')
+def get_eager_driver():
+    caps = DesiredCapabilities().FIREFOX
+
+    caps['pageLoadStrategy'] = 'eager'
+
+    return webdriver.Firefox(desired_capabilities=caps)
+
+def get_driver():
+    return webdriver.Firefox()
