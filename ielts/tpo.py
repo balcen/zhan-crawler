@@ -7,6 +7,7 @@ from selenium.common.exceptions import NoSuchElementException
 import login
 import time
 import pdb
+import requests
 
 
 def get_tpo_urls(driver, url):
@@ -135,3 +136,101 @@ def get_speak_question(driver, url):
         results = [result]
 
     return results
+
+def get_write_question(driver, url, pending_title):
+    driver.get(url)
+
+    try:
+        element = WebDriverWait(driver, 5).until(
+            lambda d: d.find_element(By.XPATH, '//a[contains(@class, "login_btn")]')
+        )
+
+        element.click()
+
+        login.login(driver)
+
+        time.sleep(3)
+
+    except TimeoutException:
+        WebDriverWait(driver, 5).until(
+            lambda d: d.find_element(By.XPATH, '//div[contains(@class, "avatar")]')
+        )
+
+    exp_content = WebDriverWait(driver, 5).until(
+        lambda d: d.find_element(By.XPATH, '//div[@class="answer_textarea"]/div[contains(@class, "ielts_fanwen")]')
+    ).get_attribute('innerHTML')
+
+    try:
+        driver.find_element(By.XPATH, '//div[contains(@class, "ielts_article")]//table')
+
+        has_table = True
+    except NoSuchElementException:
+        has_table = False
+
+    img_elements = driver.find_elements(By.XPATH, '//div[contains(@class, "ielts_article")]//img')
+    img_urls = [img_element.get_attribute('src') for img_element in img_elements]
+
+    order = 1
+    images = []
+    for img_url in img_urls:
+        img_data = requests.get(img_url).content
+
+        filename = f"storage/image/{pending_title}_{order}.png"
+
+        with open(filename, 'wb') as handler:
+            handler.write(img_data)
+
+        images.append(filename)
+
+        order += 1
+
+    result = {
+        'head_title': '',
+        'sub_head_title': '',
+        'question': '',
+        'exp': exp_content,
+        'pending_title': '',
+        'has_table': has_table,
+        'images': images,
+    }
+
+    get_write_question_content(driver, result)
+
+    # question_elements = driver.find_elements(By.XPATH, '//div[contains(@class, "ielts_article")]/*[string-length(text()) > 0]')
+    #
+    # for question_element in question_elements:
+    #     content = question_element.text
+    #
+    #     if 'You should spend about' in content:
+    #         result['head_title'] = content
+    #
+    #     elif 'Write about the following' in content:
+    #         result['sub_head_title'] = content
+    #
+    #     elif 'Write at least' in content:
+    #         result['pending_title'] = content
+    #
+    #     else:
+    #         result['question'] = result['question'] + '<p>' + content + '</p>'
+
+    return result
+
+def get_write_question_content(driver: webdriver, result: dict):
+    ielts_article_element = WebDriverWait(driver, 5).until(
+        lambda d: d.find_element(By.XPATH, '//div[contains(@class, "ielts_article")]')
+    )
+
+    texts = [l.strip() for l in ielts_article_element.text.splitlines()]
+
+    for text in texts:
+        if 'You should spend about' in text:
+            result['head_title'] = text
+
+        elif 'Write about the following' in text:
+            result['sub_head_title'] = text
+
+        elif 'Write at least' in text:
+            result['pending_title'] = text
+
+        else:
+            result['question'] = result['question'] + '<p>' + text + '</p>'

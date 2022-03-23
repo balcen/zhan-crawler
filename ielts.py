@@ -2,6 +2,7 @@ import web
 import ielts.tpo
 import storage
 import pdb
+import re
 
 
 def load_tpo_urls(type):
@@ -67,5 +68,49 @@ def load_speak_questions():
 
     storage.store(results, 'ielts/speak_questions.json')
 
+def load_write_questions():
+    driver = web.get_driver()
+
+    url_data = storage.read('ielts/section_write_urls.json')
+
+    results = []
+
+    for url_datum in url_data:
+        tests = []
+
+        tpo_order = re.search(r"\d+", url_datum['title']).group(0)
+
+        for test in url_datum['sections']:
+            sections = []
+
+            test_order = re.search(r"\d+$", test['title']).group(0)
+
+            for section in test['sections']:
+                task_order = re.search(r"\d+", section['section_part']).group(0)
+
+                pending_title = f"tpo{tpo_order}_test{test_order}_task{task_order}"
+
+                questions = ielts.tpo.get_write_question(driver, section['url'], pending_title)
+
+                sections.append({
+                    'part': section['section_part'],
+                    'title': section['title'],
+                    'questions': questions
+                })
+
+            tests.append({
+                'title': test['title'],
+                'sections': sections,
+            })
+
+        results.append({
+            'title': url_datum['title'],
+            'tests': tests,
+        })
+
+    driver.close()
+
+    storage.store(results, 'ielts/write_questions.json')
+
 if __name__ == '__main__':
-    load_speak_questions()
+    load_write_questions()
